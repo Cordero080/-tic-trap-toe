@@ -634,11 +634,18 @@ function tick() {
     cm.color.copy(col);
   });
 
-  for (const row of faceMarks) {
-    for (const mark of row) {
-      if (mark && mark.s < 1) {
+  for (let fi = 0; fi < 6; fi++) {
+    for (let ci = 0; ci < 9; ci++) {
+      const mark = faceMarks[fi][ci];
+      if (!mark) continue;
+      if (mark.s < 1) {
         mark.s = Math.min(1, mark.s + 0.065);
         mark.mesh.scale.setScalar(mark.s);
+      }
+      // Keep mark riding on the slab's front face
+      const slab = cellSlabs[fi][ci];
+      if (slab && slab.target > 0) {
+        mark.mesh.position.z = SLAB_DEPTH * slab.mesh.scale.z + 0.04;
       }
     }
   }
