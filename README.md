@@ -27,7 +27,8 @@ There's no timer. No forced turn order between faces. **If you can see the cells
 1. Open `index.html` — no build step, just open it
 2. Click any empty cell on a face that's rotating toward you
 3. Each face has its own independent X/O game
-4. Get 3 in a row on a face to win it — **first to 3 faces wins the match**
+4. Get **3 in a row** on a face to claim it
+5. Claim **3 faces** to win the match
 
 **vs Computer** — toggle the checkbox; the AI plays O on whatever face you just moved on. Switching modes resets the game.
 
