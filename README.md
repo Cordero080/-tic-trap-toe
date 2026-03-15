@@ -67,3 +67,7 @@ open index.html
 # or if your browser blocks ES modules from file://
 npx serve .
 ```
+
+---
+
+© 2025 Pablo Cordero. All rights reserved.

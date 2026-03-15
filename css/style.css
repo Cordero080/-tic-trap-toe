@@ -342,6 +342,21 @@ h2 {
   animation: none !important;
 }
 
+/* === Copyright === */
+.copyright {
+  position: fixed;
+  bottom: 10px;
+  right: 16px;
+  margin: 0;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: #2d0060;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 /* === Responsive === */
 @media (max-width: 600px) {
   h1 {
