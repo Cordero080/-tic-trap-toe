@@ -151,12 +151,17 @@ canvas.addEventListener("mousemove", (e) => {
 });
 
 /* ── Reset ── */
-document.getElementById("reset-btn").addEventListener("click", () => {
+function doReset() {
   resetAll();
   resetCubeVisuals();
   scoreXEl.classList.remove("score-match-win");
   scoreOEl.classList.remove("score-match-win");
-});
+}
+
+document.getElementById("reset-btn").addEventListener("click", doReset);
+
+// Toggling vs-computer mid-game resets so the AI state starts clean
+document.getElementById("vs-computer").addEventListener("change", doReset);
 
 /* ── Resize ── */
 window.addEventListener("resize", () => {

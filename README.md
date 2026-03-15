@@ -8,9 +8,12 @@
 
 Six tic-tac-toe boards. One rotating cube. First to win 3 faces wins the match.
 
-![Rotation](assets/screenshots/rotation-angle.jpg)
-![Confetti](assets/screenshots/confetti.jpg)
-![Win Match](assets/screenshots/win-match.jpg)
+![Title and cube overview](assets/screenshots/title-cube-overview.jpg)
+![Active face gameplay](assets/screenshots/active-face-gameplay.jpg)
+![Golden win bar on won face](assets/screenshots/golden-win-bar.jpg)
+![Confetti burst on face win](assets/screenshots/confetti-face-win.jpg)
+![Holographic won face overlay](assets/screenshots/holographic-won-face.jpg)
+![Match win score state](assets/screenshots/match-win-score.jpg)
 
 ---
 
@@ -29,13 +32,14 @@ The cube never stops spinning. Faces rotate toward you, become playable, then ro
 3. Each face tracks its own X/O turn independently
 4. Win a face by getting 3 in a row — **first to 3 faces wins**
 
-**vs Computer** — check the box; the AI plays O on whichever face you just moved on.
+**vs Computer** — check the box; the AI plays O on whichever face you just moved on. Toggling the checkbox resets the game for a clean start.
 **Reset** — clears all six boards and the score.
 
 ---
 
 ## When a Face Is Won
 
+- A golden 3D bar strikes through the winning three cells
 - Confetti bursts from the winning cell in 3D space
 - The face surface turns metallic white — winning marks glow red, losing marks go black
 - The score digit scrambles before landing on the new count
@@ -45,8 +49,13 @@ The cube never stops spinning. Faces rotate toward you, become playable, then ro
 
 ## Stack
 
-- **Three.js** via importmap CDN — raycasting, geometry, per-frame animation
-- Vanilla JS ES modules — `app.js` (pure logic) · `background.js` (all rendering + DOM)
+- **Three.js** via importmap CDN — raycasting, TextGeometry, per-frame animation
+- Vanilla JS ES modules — four files with clear separation:
+  - `app.js` — pure game logic, no DOM
+  - `cube.js` — all 3-D geometry, marks, slabs, confetti, win visuals
+  - `title.js` — extruded 3-D title mesh with foreshortening tilt
+  - `audio.js` — fully synthesized Web Audio (no audio files)
+  - `background.js` — scene, input, DOM, tick loop
 - CSS — conic-gradient button glow, glitch score animation, diagonal-stripe match-win
 - Local fonts: Valorant · ClashDisplay · Axion · Barlow Condensed
 

@@ -375,9 +375,12 @@ function spawnConfetti(fi, ci) {
   }
 }
 
-/* ── buildWinLine — 3-D golden bar spanning the three winning cells ── */
-function buildWinLine(combo, fg) {
-  const [a, , c] = combo; // only endpoints needed; middle cell is on the line
+/* ── buildWinLine — 3-D golden bar spanning the three winning cells ──
+ *  Starts at face surface; updateCube() lifts it each frame to ride on top of
+ *  the winning mark meshes as the slabs animate outward.
+ * ── */
+function buildWinLine(combo, fg, fi) {
+  const [a, , c] = combo;
   const ra = Math.floor(a / 3),
     ca = a % 3;
   const rc = Math.floor(c / 3),
@@ -388,12 +391,19 @@ function buildWinLine(combo, fg) {
   const cx = (cc - 1) * OFS,
     cy = (1 - rc) * OFS;
 
-  // Extend 22% past the endpoint cell centres so the bar overshoots the edge slightly
   const mx = (ax + cx) / 2,
     my = (ay + cy) / 2;
   const ext = 1.22;
-  const p1 = new THREE.Vector3(mx + (ax - mx) * ext, my + (ay - my) * ext, 2.0);
-  const p2 = new THREE.Vector3(mx + (cx - mx) * ext, my + (cy - my) * ext, 2.0);
+  const p1 = new THREE.Vector3(
+    mx + (ax - mx) * ext,
+    my + (ay - my) * ext,
+    0.12,
+  );
+  const p2 = new THREE.Vector3(
+    mx + (cx - mx) * ext,
+    my + (cy - my) * ext,
+    0.12,
+  );
 
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffd700,
@@ -405,7 +415,8 @@ function buildWinLine(combo, fg) {
 
   const bar = cyl(p1, p2, mat, 0.13);
   fg.add(bar);
-  wonLines.push({ mesh: bar, mat, fg });
+  // fi + cellA let updateCube() read that slab's scale each frame to lift the bar
+  wonLines.push({ mesh: bar, mat, fg, fi, cellA: a });
 }
 
 /* ── applyWonFaceVisuals — holographic overlay + red/black mark styling ── */
@@ -420,7 +431,7 @@ function applyWonFaceVisuals(fi) {
       winSet.add(a);
       winSet.add(b);
       winSet.add(c);
-      buildWinLine([a, b, c], fg);
+      buildWinLine([a, b, c], fg, fi);
       break;
     }
   }
@@ -622,6 +633,15 @@ export function updateCube(dt, t) {
       slab.mesh.scale.z = Math.max(0.001, ext);
       slab.mesh.position.z = (SLAB_DEPTH / 2) * Math.max(0.001, ext);
       slab.mat.opacity = ease * 0.9;
+    }
+  }
+
+  /* Win line — tracks the winning slab's z so the bar rides on top of the marks */
+  for (const l of wonLines) {
+    const slab = cellSlabs[l.fi][l.cellA];
+    if (slab) {
+      // Mark z = SLAB_DEPTH * slab scale + 0.04 (mark offset) + 0.1 (bar sits just above)
+      l.mesh.position.z = SLAB_DEPTH * slab.mesh.scale.z + 0.14;
     }
   }
 
