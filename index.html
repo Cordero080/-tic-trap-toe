@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="./css/style.css" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500&family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/loaders/FontLoader": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/FontLoader.js",
+          "three/addons/geometries/TextGeometry": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/TextGeometry.js"
         }
       }
     </script>
@@ -21,20 +23,7 @@
   <body>
     <canvas id="bg-canvas"></canvas>
 
-    <h1>
-      <span class="drop-letter" style="animation-delay: 0.1s">T</span>
-      <span class="drop-letter" style="animation-delay: 0.1s">i</span>
-      <span class="drop-letter" style="animation-delay: 0.1s">c</span>
-      <span class="drop-letter" style="animation-delay: 0.1s">-</span>
-      <span class="drop-letter" style="animation-delay: 0.4s">T</span>
-      <span class="drop-letter" style="animation-delay: 0.5s">r</span>
-      <span class="drop-letter" style="animation-delay: 0.1s">a</span>
-      <span class="drop-letter" style="animation-delay: 0.7s">p</span>
-      <span class="drop-letter" style="animation-delay: 0.1s">-</span>
-      <span class="drop-letter" style="animation-delay: 0.1s">T</span>
-      <span class="drop-letter" style="animation-delay: 01">o</span>
-      <span class="drop-letter" style="animation-delay: 0.1">e</span>
-    </h1>
+    <h1>Tic-Trap-Toe</h1>
     <h2 id="message">Rotate to play</h2>
 
     <div class="score-bar">

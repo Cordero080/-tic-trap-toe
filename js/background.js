@@ -1,15 +1,42 @@
+/* ── background.js — scene setup, input, DOM, and tick loop ──
+ *
+ *  This is the entry point. It owns:
+ *    - Three.js renderer, scene, camera, lights
+ *    - Canvas click + mousemove input (raycasting into cube.js hit planes)
+ *    - Reset button handler
+ *    - Score DOM animation (animateScore)
+ *    - Status message updates (updateMessage)
+ *    - The tick() loop — orchestrates cube, title, and render
+ *
+ *  Heavy lifting is delegated to:
+ *    cube.js   — all 3-D cube geometry, marks, slabs, confetti, rotation
+ *    title.js  — 3-D extruded title mesh
+ *    audio.js  — Web Audio synthesis (imported transitively through cube.js)
+ *    app.js    — pure game logic (no DOM, no Three.js)
+ * ── */
+
 import * as THREE from "three";
 import {
-  WIN_COMBOS,
   faceStates,
   score,
   matchOver,
   matchWinner,
   vsComputer,
   makeMove,
-  getComputerMove,
   resetAll,
 } from "./app.js";
+import {
+  hitPlaneMeshes,
+  hoverMeshes,
+  initCube,
+  syncMarks,
+  onFaceWon,
+  triggerComputer,
+  updateCube,
+  getActiveFaceIdx,
+  resetCubeVisuals,
+} from "./cube.js";
+import { initTitle, updateTitle } from "./title.js";
 
 /* ── Renderer ── */
 const canvas = document.getElementById("bg-canvas");
@@ -35,407 +62,21 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const sun = new THREE.DirectionalLight(0xffffff, 0.9);
 sun.position.set(5, 10, 10);
 scene.add(sun);
+// Second light from above-front so the extruded title letters catch highlights
+const titleLight = new THREE.DirectionalLight(0xffffff, 0.5);
+titleLight.position.set(0, 20, 15);
+scene.add(titleLight);
 
-/* ── Board constants ── */
-const S = 9;
-const CELL = 2.5;
-const GAP = 0.12;
-const HALF = (3 * CELL + 2 * GAP) / 2; // ≈ 3.87
-const OFS = CELL + GAP; // ≈ 2.62 — cell centre spacing
-const LPOS = HALF - CELL - GAP / 2; // ≈ 1.31 — divider positions
-
-/* ── Cube group + slab ── */
-const cube = new THREE.Group();
-scene.add(cube);
-cube.add(
-  new THREE.Mesh(
-    new THREE.BoxGeometry(S, S, S),
-    new THREE.MeshStandardMaterial({
-      color: 0x020406,
-      roughness: 0.65,
-      metalness: 0.12,
-    }),
-  ),
-);
-
-/* ── Face normals in local space ── */
-const NORMALS = [
-  new THREE.Vector3(0, 0, 1),
-  new THREE.Vector3(0, 0, -1),
-  new THREE.Vector3(0, 1, 0),
-  new THREE.Vector3(0, -1, 0),
-  new THREE.Vector3(1, 0, 0),
-  new THREE.Vector3(-1, 0, 0),
-];
-
-/* ── Cylinder helper ── */
-function cyl(a, b, mat, r = 0.06) {
-  const dir = b.clone().sub(a);
-  const len = dir.length();
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), mat);
-  m.position.copy(a.clone().add(b).multiplyScalar(0.5));
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-  return m;
-}
-
-/* ── Face configs: euler so local +Z faces outward ── */
-const FACES = [
-  { euler: [0, 0, 0], pos: [0, 0, S / 2] }, // front  +Z
-  { euler: [0, Math.PI, 0], pos: [0, 0, -S / 2] }, // back   -Z
-  { euler: [-Math.PI / 2, 0, 0], pos: [0, S / 2, 0] }, // top    +Y
-  { euler: [Math.PI / 2, 0, 0], pos: [0, -S / 2, 0] }, // bottom -Y
-  { euler: [0, Math.PI / 2, 0], pos: [S / 2, 0, 0] }, // right  +X
-  { euler: [0, -Math.PI / 2, 0], pos: [-S / 2, 0, 0] }, // left   -X
-];
-
-/* ── Per-face data ── */
-const frameMats = [];
-const cornerMats = [];
-const faceGroups = [];
-const hitPlaneMeshes = [];
-const faceMarks = Array.from({ length: 6 }, () => new Array(9).fill(null));
-const cellSlabs = Array.from({ length: 6 }, () => new Array(9).fill(null));
-const hoverMeshes = [];
-
-/* ── Shared geometries / materials ── */
-const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f2ff });
-const hitMat = new THREE.MeshBasicMaterial({ visible: false });
-const hoverMat = new THREE.MeshBasicMaterial({
-  color: 0x3513e1,
-  transparent: true,
-  opacity: 0.18,
-});
-const nodeGeo = new THREE.SphereGeometry(0.12, 8, 8);
-const hitGeo = new THREE.PlaneGeometry(CELL - 0.08, CELL - 0.08);
-const hoverGeo = new THREE.PlaneGeometry(CELL - 0.14, CELL - 0.14);
-const SLAB_DEPTH = 1.4; // full extrusion depth
-const slabGeo = new THREE.BoxGeometry(CELL - 0.18, CELL - 0.18, SLAB_DEPTH);
-
-/* ── Build all 6 faces ── */
-for (let fi = 0; fi < 6; fi++) {
-  const cfg = FACES[fi];
-  const fg = new THREE.Group();
-  fg.position.set(...cfg.pos);
-  fg.rotation.set(...cfg.euler);
-  cube.add(fg);
-  faceGroups.push(fg);
-
-  const LZ = 0.02; // grid lines above face surface
-  const FZ = 0.04; // frame
-  const MZ = 0.08; // marks
-  fg.userData.mz = MZ;
-
-  /* Grid dividers */
-  fg.add(
-    cyl(
-      new THREE.Vector3(-LPOS, -HALF, LZ),
-      new THREE.Vector3(-LPOS, HALF, LZ),
-      lineMat,
-      0.05,
-    ),
-  );
-  fg.add(
-    cyl(
-      new THREE.Vector3(LPOS, -HALF, LZ),
-      new THREE.Vector3(LPOS, HALF, LZ),
-      lineMat,
-      0.05,
-    ),
-  );
-  fg.add(
-    cyl(
-      new THREE.Vector3(-HALF, -LPOS, LZ),
-      new THREE.Vector3(HALF, -LPOS, LZ),
-      lineMat,
-      0.05,
-    ),
-  );
-  fg.add(
-    cyl(
-      new THREE.Vector3(-HALF, LPOS, LZ),
-      new THREE.Vector3(HALF, LPOS, LZ),
-      lineMat,
-      0.05,
-    ),
-  );
-
-  /* Rainbow frame + halo */
-  const fc = [
-    new THREE.Vector3(-HALF, -HALF, FZ),
-    new THREE.Vector3(HALF, -HALF, FZ),
-    new THREE.Vector3(HALF, HALF, FZ),
-    new THREE.Vector3(-HALF, HALF, FZ),
-  ];
-  for (let i = 0; i < 4; i++) {
-    const fm = new THREE.MeshBasicMaterial({ color: 0x5500ff });
-    frameMats.push(fm);
-    fg.add(cyl(fc[i], fc[(i + 1) % 4], fm, 0.09));
-
-    const hm = new THREE.MeshBasicMaterial({
-      color: 0x5500ff,
-      transparent: true,
-      opacity: 0.22,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    frameMats.push(hm);
-    fg.add(cyl(fc[i], fc[(i + 1) % 4], hm, 0.165));
-  }
-
-  /* Corner nodes */
-  for (let i = 0; i < 4; i++) {
-    const nm = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    cornerMats.push(nm);
-    const m = new THREE.Mesh(nodeGeo, nm);
-    m.position.copy(fc[i]);
-    fg.add(m);
-  }
-
-  /* Hit planes — one per cell */
-  for (let ci = 0; ci < 9; ci++) {
-    const r = Math.floor(ci / 3),
-      c = ci % 3;
-    const hp = new THREE.Mesh(hitGeo, hitMat);
-    hp.position.set((c - 1) * OFS, (1 - r) * OFS, LZ + 0.01);
-    hp.userData = { fi, ci };
-    fg.add(hp);
-    hitPlaneMeshes.push(hp);
-  }
-
-  /* Cell slabs — one per cell, extrude outward on mark placement */
-  for (let ci = 0; ci < 9; ci++) {
-    const r = Math.floor(ci / 3),
-      c = ci % 3;
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xd0cfe8,
-      metalness: 0.92,
-      roughness: 0.08,
-      transparent: true,
-      opacity: 0,
-    });
-    const slab = new THREE.Mesh(slabGeo, mat);
-    slab.position.set((c - 1) * OFS, (1 - r) * OFS, SLAB_DEPTH / 2);
-    slab.scale.z = 0.001;
-    fg.add(slab);
-    cellSlabs[fi][ci] = { mesh: slab, mat, t: 0, target: 0 };
-  }
-
-  /* Hover highlight (one per face, repositioned on hover) */
-  const hv = new THREE.Mesh(hoverGeo, hoverMat);
-  hv.position.z = 0.06;
-  hv.visible = false;
-  fg.add(hv);
-  hoverMeshes.push(hv);
-}
-
-/* ── Mark builders ── */
-function buildX() {
-  const g = new THREE.Group();
-  const len = CELL * 0.55;
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.35,
-    metalness: 0.1,
-  });
-  for (const angle of [Math.PI / 4, -Math.PI / 4]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, len, 9), mat);
-    m.rotation.z = angle;
-    g.add(m);
-  }
-  return g;
-}
-
-function buildO() {
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xddd0ff,
-    roughness: 0.35,
-    metalness: 0.1,
-  });
-  return new THREE.Mesh(new THREE.TorusGeometry(CELL * 0.28, 0.1, 14, 44), mat);
-}
-
-/* ── Sync game state → 3-D marks ── */
-function syncMarks() {
-  for (let fi = 0; fi < 6; fi++) {
-    const state = faceStates[fi];
-    const fg = faceGroups[fi];
-    const mz = fg.userData.mz;
-    for (let ci = 0; ci < 9; ci++) {
-      const val = state.board[ci];
-      const existing = faceMarks[fi][ci];
-      if (val && !existing) {
-        const mesh = val === "X" ? buildX() : buildO();
-        const r = Math.floor(ci / 3),
-          c = ci % 3;
-        mesh.position.set((c - 1) * OFS, (1 - r) * OFS, 0.04); // slab will carry z
-        mesh.scale.setScalar(0.01);
-        fg.add(mesh);
-        faceMarks[fi][ci] = { mesh, s: 0.01 };
-        // Activate cell slab extrusion + click sound
-        const slab = cellSlabs[fi][ci];
-        if (slab) {
-          slab.mat.color.set(val === "X" ? 0xe8e4ff : 0xd4eeff);
-          slab.target = 0.45;
-        }
-        playClick();
-      } else if (!val && existing) {
-        fg.remove(existing.mesh);
-        faceMarks[fi][ci] = null;
-      }
-    }
-  }
-}
-
-/* ── Face visibility ── */
-const CLICK_THRESHOLD = 0.08; // any face generally toward camera is playable
-const _wn = new THREE.Vector3();
-
-function getFaceDot(fi) {
-  return _wn.copy(NORMALS[fi]).applyQuaternion(cube.quaternion).z;
-}
-
-function getActiveFaceIdx() {
-  let best = -1,
-    bestDot = CLICK_THRESHOLD;
-  for (let fi = 0; fi < 6; fi++) {
-    const d = getFaceDot(fi);
-    if (d > bestDot) {
-      bestDot = d;
-      best = fi;
-    }
-  }
-  return best;
-}
-
-/* ── Confetti — bursts from the winning cell in world space ── */
-const NEON = [
-  0xff00ff, 0x00ffff, 0xffff00, 0xff4400, 0x44ff00, 0x0088ff, 0xff0088,
-];
-const confetti = [];
-
-function spawnConfetti(fi, ci) {
-  cube.updateWorldMatrix(true, true);
-  const r = Math.floor(ci / 3),
-    c = ci % 3;
-  const cellPos = new THREE.Vector3((c - 1) * OFS, (1 - r) * OFS, 0.08);
-  faceGroups[fi].localToWorld(cellPos); // cellPos now in world space
-  const faceNormal = NORMALS[fi].clone().applyQuaternion(cube.quaternion);
-
-  for (let i = 0; i < 44; i++) {
-    const mat = new THREE.MeshBasicMaterial({
-      color: NEON[Math.floor(Math.random() * NEON.length)],
-      transparent: true,
-      opacity: 1,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(
-        0.12 + Math.random() * 0.42,
-        0.07 + Math.random() * 0.26,
-      ),
-      mat,
-    );
-    mesh.position.copy(cellPos);
-    mesh.position.x += (Math.random() - 0.5) * 0.6;
-    mesh.position.y += (Math.random() - 0.5) * 0.6;
-    mesh.rotation.set(
-      Math.random() * 6.28,
-      Math.random() * 6.28,
-      Math.random() * 6.28,
-    );
-    scene.add(mesh);
-
-    const speed = 5 + Math.random() * 10;
-    const vel = faceNormal.clone().multiplyScalar(speed);
-    vel.x += (Math.random() - 0.5) * 6;
-    vel.y += (Math.random() - 0.5) * 6 + 1.5;
-    vel.z += (Math.random() - 0.5) * 6;
-
-    confetti.push({
-      mesh,
-      mat,
-      vel,
-      rx: (Math.random() - 0.5) * 13,
-      ry: (Math.random() - 0.5) * 13,
-      rz: (Math.random() - 0.5) * 13,
-      life: 0,
-      maxLife: 1.0 + Math.random() * 0.9,
-    });
-  }
-}
-
-/* ── Won-face visuals: holographic overlay + red marks ── */
-const wonOverlays = []; // { mesh, mat, fg, t }
-
-function applyWonFaceVisuals(fi) {
-  const fg = faceGroups[fi];
-  const board = faceStates[fi].board;
-
-  // Find the winning cell indices
-  const winSet = new Set();
-  for (const [a, b, c] of WIN_COMBOS) {
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      winSet.add(a);
-      winSet.add(b);
-      winSet.add(c);
-      break;
-    }
-  }
-
-  // Holographic metallic white plane — fades in, HSL-cycles in tick()
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xf8f6ff,
-    metalness: 0.95,
-    roughness: 0.05,
-    transparent: true,
-    opacity: 0,
-  });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(S - 0.08, S - 0.08), mat);
-  mesh.position.z = 0.018;
-  fg.add(mesh);
-  wonOverlays.push({ mesh, mat, fg, t: 0 });
-
-  // Style each mark: winners → vivid red + emissive; losers → black
-  // Also boost winning slabs to full extrusion
-  for (let ci = 0; ci < 9; ci++) {
-    const mark = faceMarks[fi][ci];
-    const slab = cellSlabs[fi][ci];
-    const isWinner = winSet.has(ci);
-    if (mark) {
-      mark.mesh.traverse((child) => {
-        if (child.isMesh && child.material) {
-          child.material = child.material.clone();
-          if (isWinner) {
-            child.material.color.set(0xff1a00);
-            child.material.emissive = new THREE.Color(0x991000);
-            child.material.emissiveIntensity = 0.55;
-          } else {
-            child.material.color.set(0x111111);
-            child.material.emissive = new THREE.Color(0x000000);
-            child.material.emissiveIntensity = 0;
-          }
-        }
-      });
-    }
-    if (slab && isWinner) {
-      // Winning slabs punch to full depth in jet black metallic
-      slab.mat.color.set(0x080808);
-      slab.mat.metalness = 0.98;
-      slab.mat.roughness = 0.02;
-      slab.target = 1.0;
-    }
-  }
-}
-
-/* ── Score DOM animation ── */
+/* ── Score DOM elements ── */
 const scoreXEl = document.getElementById("score-x");
 const scoreOEl = document.getElementById("score-o");
 
+/* ── animateScore — scrambles the digit before landing on the new value ── */
 function animateScore(winner, onDone) {
   const el = winner === "X" ? scoreXEl : scoreOEl;
   const target = score[winner];
   el.classList.remove("score-pop", "score-match-win");
-  void el.offsetWidth;
+  void el.offsetWidth; // force reflow so the animation restarts
   el.classList.add("score-pop");
   let frame = 0;
   const iv = setInterval(() => {
@@ -450,261 +91,21 @@ function animateScore(winner, onDone) {
   }, 38);
 }
 
-function onFaceWon(fi, ci) {
-  const winner = faceStates[fi].winner;
-  if (!winner || winner === "draw") return;
-  spawnConfetti(fi, ci);
-  applyWonFaceVisuals(fi);
-  // Fire audio immediately — no waiting for score scramble
-  if (matchOver) {
-    playMatchWin();
-    playRobotVoice(true);
-  } else {
-    playThud();
-    playRobotVoice(false);
-  }
+/* ── Init cube + title (pass animateScore callback so cube.js can trigger it) ── */
+initCube(scene, (winner) => {
   animateScore(winner, (el) => {
     if (matchOver) {
       el.classList.remove("score-pop");
       el.classList.add("score-match-win");
     }
   });
-}
-
-/* ── Audio — Web Audio API synthesis, no files needed ── */
-let _audioCtx = null;
-function getAudio() {
-  if (!_audioCtx) _audioCtx = new AudioContext();
-  if (_audioCtx.state === "suspended") _audioCtx.resume();
-  return _audioCtx;
-}
-
-function playClick() {
-  const ctx = getAudio();
-  const len = ctx.sampleRate * 0.07;
-  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++)
-    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 10);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  const bpf = ctx.createBiquadFilter();
-  bpf.type = "bandpass";
-  bpf.frequency.value = 5200;
-  bpf.Q.value = 1.8;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.35, ctx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
-  src.connect(bpf);
-  bpf.connect(g);
-  g.connect(ctx.destination);
-  src.start();
-}
-
-function playThud() {
-  const ctx = getAudio();
-  const now = ctx.currentTime;
-
-  // Synthesized reverb impulse response — 3s decaying noise
-  const irLen = ctx.sampleRate * 3.0;
-  const irBuf = ctx.createBuffer(2, irLen, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = irBuf.getChannelData(ch);
-    for (let i = 0; i < irLen; i++)
-      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.4);
-  }
-  const convolver = ctx.createConvolver();
-  convolver.buffer = irBuf;
-  const wetGain = ctx.createGain();
-  wetGain.gain.value = 0.55;
-  convolver.connect(wetGain);
-  wetGain.connect(ctx.destination);
-
-  // Low-frequency pitch drop — routed dry + wet
-  const osc = ctx.createOscillator();
-  osc.frequency.setValueAtTime(140, now);
-  osc.frequency.exponentialRampToValueAtTime(36, now + 0.4);
-  const oscGain = ctx.createGain();
-  oscGain.gain.setValueAtTime(1.0, now);
-  oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-  osc.connect(oscGain);
-  oscGain.connect(ctx.destination); // dry
-  oscGain.connect(convolver); // wet
-  osc.start();
-  osc.stop(now + 0.55);
-
-  // Noise punch — low-passed, also into reverb
-  const nLen = ctx.sampleRate * 0.15;
-  const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
-  const nd = nBuf.getChannelData(0);
-  for (let i = 0; i < nLen; i++)
-    nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nLen, 3);
-  const nSrc = ctx.createBufferSource();
-  nSrc.buffer = nBuf;
-  const lpf = ctx.createBiquadFilter();
-  lpf.type = "lowpass";
-  lpf.frequency.value = 280;
-  const nGain = ctx.createGain();
-  nGain.gain.setValueAtTime(0.55, now);
-  nSrc.connect(lpf);
-  lpf.connect(nGain);
-  nGain.connect(ctx.destination); // dry
-  nGain.connect(convolver); // wet
-  nSrc.start();
-}
-
-function playRobotVoice(isMatchWin = false) {
-  const ctx = getAudio();
-  const now = ctx.currentTime;
-  const dur = isMatchWin ? 2.4 : 1.1;
-
-  // Hard waveshaper distortion — transformer crunch
-  const distortion = ctx.createWaveShaper();
-  const n = 512,
-    k = 140;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i * 2) / n - 1;
-    curve[i] = ((Math.PI + k) * x) / (Math.PI + k * Math.abs(x));
-  }
-  distortion.curve = curve;
-  distortion.oversample = "4x";
-
-  // Short metallic reverb
-  const irLen = ctx.sampleRate * 1.6;
-  const irBuf = ctx.createBuffer(2, irLen, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = irBuf.getChannelData(ch);
-    for (let i = 0; i < irLen; i++)
-      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.8);
-  }
-  const reverb = ctx.createConvolver();
-  reverb.buffer = irBuf;
-  const reverbGain = ctx.createGain();
-  reverbGain.gain.value = 0.38;
-  reverb.connect(reverbGain);
-  reverbGain.connect(ctx.destination);
-
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(0.55, now);
-  master.gain.exponentialRampToValueAtTime(0.001, now + dur);
-  master.connect(ctx.destination);
-  master.connect(reverb);
-
-  // FM carrier — sawtooth for rich robotic harmonics
-  const carrier = ctx.createOscillator();
-  carrier.type = "sawtooth";
-  if (isMatchWin) {
-    // Ascending transformer triumph — staircase sweeps
-    carrier.frequency.setValueAtTime(80, now);
-    carrier.frequency.linearRampToValueAtTime(200, now + 0.28);
-    carrier.frequency.setValueAtTime(155, now + 0.3);
-    carrier.frequency.linearRampToValueAtTime(310, now + 0.75);
-    carrier.frequency.setValueAtTime(230, now + 0.78);
-    carrier.frequency.linearRampToValueAtTime(520, now + 1.6);
-    carrier.frequency.linearRampToValueAtTime(880, now + 2.2);
-  } else {
-    // Quick droid chirp — two punchy rises
-    carrier.frequency.setValueAtTime(220, now);
-    carrier.frequency.linearRampToValueAtTime(440, now + 0.18);
-    carrier.frequency.setValueAtTime(200, now + 0.2);
-    carrier.frequency.linearRampToValueAtTime(480, now + 0.6);
-    carrier.frequency.setValueAtTime(320, now + 0.62);
-    carrier.frequency.linearRampToValueAtTime(660, now + 0.95);
-  }
-
-  // FM modulator — metallic formant texture
-  const modulator = ctx.createOscillator();
-  modulator.type = "sine";
-  modulator.frequency.value = isMatchWin ? 55 : 75;
-  const modGain = ctx.createGain();
-  modGain.gain.value = isMatchWin ? 200 : 260;
-  modulator.connect(modGain);
-  modGain.connect(carrier.frequency);
-
-  const carrierGain = ctx.createGain();
-  carrierGain.gain.value = 0.85;
-  carrier.connect(carrierGain);
-  carrierGain.connect(distortion);
-  distortion.connect(master);
-
-  carrier.start(now);
-  modulator.start(now);
-  carrier.stop(now + dur);
-  modulator.stop(now + dur);
-
-  // Ring modulation shimmer on match win only
-  if (isMatchWin) {
-    const ringBase = ctx.createOscillator();
-    ringBase.type = "sine";
-    ringBase.frequency.setValueAtTime(1100, now + 0.25);
-    ringBase.frequency.exponentialRampToValueAtTime(220, now + 2.0);
-    const ringMod = ctx.createOscillator();
-    ringMod.frequency.value = 480;
-    const ringGain = ctx.createGain();
-    ringGain.gain.value = 0;
-    ringMod.connect(ringGain.gain);
-    const ringOut = ctx.createGain();
-    ringOut.gain.setValueAtTime(0.22, now + 0.25);
-    ringOut.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    ringBase.connect(ringGain);
-    ringGain.connect(ringOut);
-    ringOut.connect(master);
-    ringBase.start(now + 0.25);
-    ringMod.start(now + 0.25);
-    ringBase.stop(now + dur);
-    ringMod.stop(now + dur);
-  }
-}
-
-function playMatchWin() {
-  const ctx = getAudio();
-  const now = ctx.currentTime;
-  // Deep resonant chord — A1, E2, A2, C#3
-  [55, 82.4, 110, 138.6].forEach((freq, i) => {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.18, now + 0.4 + i * 0.12);
-    g.gain.setValueAtTime(0.18, now + 1.8);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start(now + i * 0.08);
-    osc.stop(now + 3.5);
-  });
-  // Metallic shimmer on top
-  const shimmer = ctx.createOscillator();
-  shimmer.type = "triangle";
-  shimmer.frequency.setValueAtTime(880, now);
-  shimmer.frequency.exponentialRampToValueAtTime(440, now + 1.2);
-  const sg = ctx.createGain();
-  sg.gain.setValueAtTime(0.12, now);
-  sg.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-  shimmer.connect(sg);
-  sg.connect(ctx.destination);
-  shimmer.start(now);
-  shimmer.stop(now + 1.2);
-}
-
-/* ── Computer move ── */
-function triggerComputer(fi) {
-  setTimeout(() => {
-    const prevWinner = faceStates[fi].winner;
-    const move = getComputerMove(fi);
-    if (move >= 0) {
-      makeMove(fi, move);
-      syncMarks();
-      if (!prevWinner && faceStates[fi].winner) onFaceWon(fi, move);
-    }
-  }, 500);
-}
+});
+initTitle(scene, camera);
 
 /* ── Input ── */
 const raycaster = new THREE.Raycaster();
 const ptr = new THREE.Vector2();
+const OFS = 2.5 + 0.12; // CELL + GAP — matches cube.js constants
 
 function setPtr(e) {
   ptr.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -752,42 +153,9 @@ canvas.addEventListener("mousemove", (e) => {
 /* ── Reset ── */
 document.getElementById("reset-btn").addEventListener("click", () => {
   resetAll();
-  for (let fi = 0; fi < 6; fi++) {
-    for (let ci = 0; ci < 9; ci++) {
-      const m = faceMarks[fi][ci];
-      if (m) {
-        faceGroups[fi].remove(m.mesh);
-        faceMarks[fi][ci] = null;
-      }
-    }
-  }
-  // Reset cell slabs
-  for (const row of cellSlabs) {
-    for (const slab of row) {
-      if (!slab) continue;
-      slab.t = 0;
-      slab.target = 0;
-      slab.mesh.scale.z = 0.001;
-      slab.mesh.position.z = SLAB_DEPTH / 2;
-      slab.mat.opacity = 0;
-      slab.mat.color.set(0xd0cfe8);
-      slab.mat.metalness = 0.92;
-      slab.mat.roughness = 0.08;
-    }
-  }
-  // Remove holographic won-face overlays
-  for (const o of wonOverlays) {
-    o.fg.remove(o.mesh);
-    o.mat.dispose();
-    o.mesh.geometry.dispose();
-  }
-  wonOverlays.length = 0;
-  // Clear match-win score styling
+  resetCubeVisuals();
   scoreXEl.classList.remove("score-match-win");
   scoreOEl.classList.remove("score-match-win");
-  hoverMeshes.forEach((hv) => {
-    hv.visible = false;
-  });
 });
 
 /* ── Resize ── */
@@ -820,13 +188,9 @@ function updateMessage() {
   }
 }
 
-/* ── Animate ── */
+/* ── Tick loop ── */
 const clock = new THREE.Clock();
-const col = new THREE.Color();
 let prevT = 0;
-let matchOverT = -1; // clock time when matchOver first detected
-let frozenRotY = 0;
-let frozenRotX = 0;
 
 function tick() {
   requestAnimationFrame(tick);
@@ -834,93 +198,8 @@ function tick() {
   const dt = Math.min(t - prevT, 0.05);
   prevT = t;
 
-  if (matchOver) {
-    if (matchOverT < 0) {
-      // Capture rotation at the moment of match win
-      matchOverT = t;
-      frozenRotY = cube.rotation.y;
-      frozenRotX = cube.rotation.x;
-    }
-    const age = t - matchOverT;
-    const slow = Math.exp(-age * 2.0); // exponential deceleration
-    cube.rotation.y = frozenRotY + age * 0.22 * slow;
-    cube.rotation.x = frozenRotX * Math.exp(-age * 2.5); // eases back to level
-    // Damped scale pulse — two quick thumps then settles
-    const pulse = 1 + 0.11 * Math.sin(age * 16) * Math.exp(-age * 4.5);
-    cube.scale.setScalar(pulse);
-  } else {
-    matchOverT = -1;
-    cube.rotation.y = t * 0.22;
-    cube.rotation.x = Math.sin(t * 0.13) * 0.48;
-    cube.scale.setScalar(1);
-  }
-
-  const h = (t * 0.08) % 1;
-  frameMats.forEach((fm, i) => {
-    col.setHSL((h + i * 0.04) % 1, 1.0, 0.5);
-    fm.color.copy(col);
-  });
-  cornerMats.forEach((cm, i) => {
-    col.setHSL((h + i * 0.12) % 1, 1.0, 0.6);
-    cm.color.copy(col);
-  });
-
-  for (let fi = 0; fi < 6; fi++) {
-    for (let ci = 0; ci < 9; ci++) {
-      const mark = faceMarks[fi][ci];
-      if (!mark) continue;
-      if (mark.s < 1) {
-        mark.s = Math.min(1, mark.s + 0.065);
-        mark.mesh.scale.setScalar(mark.s);
-      }
-      // Keep mark riding on the slab's front face at all times
-      const slab = cellSlabs[fi][ci];
-      if (slab) {
-        mark.mesh.position.z = SLAB_DEPTH * slab.mesh.scale.z + 0.04;
-      }
-    }
-  }
-
-  /* Cell slab extrusion animation */
-  for (const row of cellSlabs) {
-    for (const slab of row) {
-      if (!slab || slab.target === 0) continue;
-      slab.t = Math.min(1, slab.t + dt * 4);
-      const ease = 1 - Math.pow(1 - slab.t, 3); // cubic ease-out
-      const ext = ease * slab.target;
-      slab.mesh.scale.z = Math.max(0.001, ext);
-      // Keep back face flush with cube surface: position z = depth/2 * scale
-      slab.mesh.position.z = (SLAB_DEPTH / 2) * Math.max(0.001, ext);
-      slab.mat.opacity = ease * 0.9;
-    }
-  }
-
-  /* Won-face holographic overlay — fade in + HSL color cycle */
-  for (const o of wonOverlays) {
-    o.t += dt;
-    o.mat.opacity = Math.min(0.72, o.t * 0.9);
-    col.setHSL((t * 0.12 + o.t * 0.3) % 1, 0.9, 0.82);
-    o.mat.color.copy(col);
-  }
-
-  /* Confetti particle simulation */
-  for (let i = confetti.length - 1; i >= 0; i--) {
-    const p = confetti[i];
-    p.life += dt;
-    p.vel.y -= 11 * dt; // gravity
-    p.mesh.position.addScaledVector(p.vel, dt);
-    p.mesh.rotation.x += p.rx * dt;
-    p.mesh.rotation.y += p.ry * dt;
-    p.mesh.rotation.z += p.rz * dt;
-    p.mat.opacity = Math.max(0, 1 - p.life / p.maxLife);
-    if (p.life >= p.maxLife) {
-      scene.remove(p.mesh);
-      p.mat.dispose();
-      p.mesh.geometry.dispose();
-      confetti.splice(i, 1);
-    }
-  }
-
+  updateCube(dt, t);
+  updateTitle(t);
   updateMessage();
   renderer.render(scene, camera);
 }

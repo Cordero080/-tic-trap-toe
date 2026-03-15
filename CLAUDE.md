@@ -19,46 +19,51 @@ python3 -m http.server
 A 6-face cube tic-tac-toe game. Each face of a rotating 3D cube is an independent tic-tac-toe board. First player to win 3 faces wins the match. Built with Three.js (CDN importmap, no bundler) and vanilla ES modules.
 
 **Module split:**
-- `js/app.js` — pure game logic, no DOM except the vs-computer checkbox listener. Exports live bindings (`export let matchOver`, etc.) consumed by background.js each frame.
-- `js/background.js` — owns everything visual: Three.js scene, cube geometry, raycasting, mark rendering, confetti, DOM score/message updates. Imports from app.js.
-- `css/style.css` — layout, typography, button glow (conic-gradient pseudo-elements), score animations
+- `js/app.js` — pure game logic, no DOM/Three.js. Exports live bindings consumed each frame.
+- `js/background.js` — entry point: renderer, scene, camera, lights, input handlers, score/message DOM, `tick()` loop
+- `js/cube.js` — all 3-D cube geometry, marks, cell slabs, confetti, won-face overlays, rotation, color cycling
+- `js/title.js` — 3-D extruded `TextGeometry` title mesh (async FontLoader)
+- `js/audio.js` — Web Audio API synthesis (no audio files; everything synthesized)
+- `css/style.css` — fixed-position HUD styles; `h1 { display: none }` (title is Three.js only)
 - `css/fonts/` — local font files (Axion TTF, ClashDisplay OTF variants, Valorant TTF)
 
-**Key data structures:**
+**Dependency graph:**
+```
+background.js → cube.js, title.js, app.js
+cube.js       → audio.js, app.js
+title.js      → THREE (FontLoader, TextGeometry)
+audio.js      → (none)
+app.js        → (none)
+```
 
-`app.js` exports:
+**`app.js` exports:**
 - `faceStates` — array of 6 `{ board: string[9], turn, winner, moves }` objects, one per cube face
 - `score` — `{ X: number, O: number }`
 - `matchOver`, `matchWinner`, `vsComputer` — live-binding `let` exports
-- `WIN_COMBOS` — the 8 winning index triples, exported so background.js can identify winning cells for visual styling
+- `WIN_COMBOS` — the 8 winning index triples, used by cube.js to identify winning cells
 - `makeMove(fi, ci)` — mutates faceStates, score, matchOver; returns true if the move was valid
 - `getComputerMove(fi)` — returns best cell index for O (win → block → center → corner → random)
 - `resetAll()` — resets all state
 
-**Three.js face setup (`background.js`):**
-- 6 `THREE.Group` objects (`faceGroups[fi]`), each euler-rotated so local +Z points outward from the cube
-- Each face group contains: 4 grid-divider cylinders, 8 rainbow frame/halo cylinders (`frameMats`), 4 corner sphere nodes (`cornerMats`), 9 invisible hit planes (for raycasting), 1 hover highlight mesh
-- `NORMALS[fi]` — local-space outward normal per face; `NORMALS[fi].clone().applyQuaternion(cube.quaternion)` gives world-space normal
-- Marks (`faceMarks[fi][ci]`) are built by `buildX()` / `buildO()` and scale-animated from 0→1 in `tick()`
-- Hit detection uses `raycaster.intersectObjects(hitPlaneMeshes)` — Three.js FrontSide backface culling prevents clicking through the cube; no manual dot-product guard needed
+**`cube.js` key details:**
+- `initCube(scene, animateScoreCb)` — builds all geometry; receives score-animation callback from background.js
+- `hitPlaneMeshes` / `hoverMeshes` — exported arrays, read by background.js input handlers
+- 6 `THREE.Group` objects (faceGroups, internal), each euler-rotated so local +Z points outward from the cube
+- Each face contains: 4 grid-divider cylinders, 8 rainbow frame/halo cylinders, 4 corner spheres, 9 invisible hit planes, cell slabs, 1 hover highlight
+- `NORMALS[fi]` — local-space outward normal; `.clone().applyQuaternion(cube.quaternion)` = world-space
+- `updateCube(dt, t)` — rotation, rainbow color cycling, mark pop-in, slab extrusion, won-face overlay fade/HSL cycle, confetti physics
 
-**Won-face visuals (`applyWonFaceVisuals(fi)`):**
-- Finds the winning cell triple via `WIN_COMBOS`
-- Winning-line marks → red (`#ff1a00`) with warm emissive
-- Losing marks → near-black (`#111111`)
-- Adds a `MeshStandardMaterial` (metalness 0.95, roughness 0.05) plane overlay that fades in and HSL-color-cycles in `tick()` via `wonOverlays[]`
+**`title.js` key details:**
+- `initTitle(scene, camera)` — async font load; `TextGeometry` uses `height` param (NOT `depth`) for extrusion thickness
+- `updateTitle(t)` — sine-wave float + `lookAt(camera.position)` every frame (keeps letters facing camera)
+- To swap font: convert TTF at gero3.github.io/facetype.js → save JSON → change URL in `initTitle()`
 
-**Confetti (`spawnConfetti(fi, ci)`):**
-- `cube.updateWorldMatrix(true, true)` then `faceGroups[fi].localToWorld(cellPos)` converts the winning cell's local position to world space
-- 44 neon `PlaneGeometry` particles burst outward along the face normal, with gravity and fade in `tick()`
+**Turn flow:**
+1. `canvas click` → `makeMove(fi, ci)` → `syncMarks()` → `onFaceWon()` if winner → `triggerComputer()` if vs AI
+2. `triggerComputer` delays 500ms, calls `getComputerMove(fi)` then same flow
 
-**Score animation (`animateScore(winner, onDone)`):**
-- Scrambles the digit 14 frames at 38 ms each, then sets the real value and calls `onDone(el)`
-- If `matchOver`, the callback adds `.score-match-win` (yellow/red diagonal stripe text via `repeating-linear-gradient`)
+**Score animation:** Scrambles the digit 14 frames × 38 ms, then lands on real value. If `matchOver`, adds `.score-match-win` (yellow/red diagonal stripe via CSS `repeating-linear-gradient`).
 
-**Reset:** Removes all mark meshes, disposes and clears `wonOverlays[]`, strips `.score-match-win` from score elements, calls `resetAll()`.
+**Board geometry constants** (defined in cube.js): `S=9`, `CELL=2.5`, `GAP=0.12`, `OFS=CELL+GAP` (cell centre spacing).
 
-**Rotation constants:**
-- `cube.rotation.y = t * 0.22` (continuous Y spin)
-- `cube.rotation.x = Math.sin(t * 0.13) * 0.48` (gentle X tilt)
-- Board geometry: `S=9` (cube side length), `CELL=2.5`, `GAP=0.12`, `OFS = CELL + GAP` (cell centre spacing)
+**Rotation:** `y = t * 0.22` continuous spin; `x = sin(t * 0.13) * 0.48` tilt. On match win: exponential deceleration + damped scale pulse.

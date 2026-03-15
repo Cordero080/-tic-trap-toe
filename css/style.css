@@ -57,18 +57,9 @@ body {
   display: none;
 }
 
-/* === Title — fixed to top of viewport === */
+/* === Title — hidden; Three.js renders it as a 3-D canvas-texture plane === */
 h1 {
-  position: fixed;
-  font-size: 45px;
-  top: 50px;
-  left: 0;
-  width: 100%;
-  text-align: center;
-  margin: 0;
-  padding: 0;
-  font-family: "Valorant", sans-serif;
-  letter-spacing: 0.08em;
+  display: none;
 }
 
 /* === Message — fixed below title === */
@@ -138,15 +129,6 @@ label {
   }
 }
 
-@keyframes letterspace-move {
-  0% {
-    letter-spacing: 0.6em;
-  }
-  200% {
-    letter-spacing: normal;
-  }
-}
-
 @keyframes drop-in {
   0% {
     transform: translateY(-400%);
@@ -184,35 +166,10 @@ body h2 {
   text-shadow: 0 2px 8px rgba(45, 0, 100, 0.18);
 }
 
-h1 {
-  animation:
-    bw-gradient-move 7s linear infinite,
-    letterspace-move 7s cubic-bezier(0.4, 0, 0.2, 1) forwards,
-    drop-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
 h2 {
   animation:
     bw-gradient-move 7s linear infinite,
     drop-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Drop-in per letter */
-.drop-letter {
-  display: inline-block;
-  animation: drop-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
-  background: linear-gradient(
-    360deg,
-    #2d0060 0%,
-    #0a0080 25%,
-    #001a70 50%,
-    #3d0080 75%,
-    #2d0060 100%
-  );
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  color: transparent;
 }
 
 /* === Reset Button glow === */
