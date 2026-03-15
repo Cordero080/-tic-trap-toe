@@ -207,9 +207,9 @@ for (let fi = 0; fi < 6; fi++) {
     const r = Math.floor(ci / 3),
       c = ci % 3;
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x1a1228,
-      metalness: 0.5,
-      roughness: 0.4,
+      color: 0xd0cfe8,
+      metalness: 0.92,
+      roughness: 0.08,
       transparent: true,
       opacity: 0,
     });
@@ -274,8 +274,8 @@ function syncMarks() {
         // Activate cell slab extrusion
         const slab = cellSlabs[fi][ci];
         if (slab) {
-          slab.mat.color.set(val === "X" ? 0x1a1040 : 0x0d1a2e);
-          slab.target = 0.32; // normal extrusion depth
+          slab.mat.color.set(val === "X" ? 0xe8e4ff : 0xd4eeff);
+          slab.target = 0.78;
         }
       } else if (!val && existing) {
         fg.remove(existing.mesh);
@@ -541,7 +541,7 @@ document.getElementById("reset-btn").addEventListener("click", () => {
       slab.mesh.scale.z = 0.001;
       slab.mesh.position.z = SLAB_DEPTH / 2;
       slab.mat.opacity = 0;
-      slab.mat.color.set(0x1a1228);
+      slab.mat.color.set(0xd0cfe8);
     }
   }
   // Remove holographic won-face overlays
