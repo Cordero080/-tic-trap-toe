@@ -1,0 +1,409 @@
+@font-face {
+  font-family: "Axion";
+  src: url("./fonts/Axion PERSONAL USE ONLY!.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "ClashDisplay";
+  src: url("./fonts/ClashDisplay-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "ClashDisplay";
+  src: url("./fonts/ClashDisplay-Semibold.otf") format("opentype");
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Valorant";
+  src: url("./fonts/Valorant_Font.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "ClashDisplay";
+  src: url("./fonts/ClashDisplay-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+body {
+  background-color: #f2f2f8;
+  font-family: "ClashDisplay", sans-serif;
+  color: #2d0060;
+  font-size: 24px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* === Three.js canvas fills the viewport === */
+#bg-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+}
+
+/* === Board is hidden — Three.js renders it visually === */
+.board {
+  display: none;
+}
+
+/* === Title — fixed to top of viewport === */
+h1 {
+  position: fixed;
+  font-size: 45px;
+  top: 50px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+  font-family: "Valorant", sans-serif;
+  letter-spacing: 0.08em;
+}
+
+/* === Message — fixed below title === */
+h2 {
+  position: fixed;
+  top: 160px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  margin: 0;
+  font-size: 18px;
+  font-family: "ClashDisplay", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* === Controls group — fixed, centered at bottom === */
+.controls {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* === Reset button — position: relative so ::before/::after glow escapes correctly === */
+#reset-btn {
+  position: relative; /* must NOT be fixed — keeps pseudo-element z-index working */
+  background-color: #1a1919;
+  color: #fffdfd;
+  border: none;
+  padding: 10px 24px;
+  font-size: 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: "Doto", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  -webkit-text-fill-color: #fdfdfd !important;
+}
+
+/* === Checkbox label === */
+label {
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* === Title Animations === */
+@keyframes bw-gradient-move {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes letterspace-move {
+  0% {
+    letter-spacing: 0.6em;
+  }
+  200% {
+    letter-spacing: normal;
+  }
+}
+
+@keyframes drop-in {
+  0% {
+    transform: translateY(-400%);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(30%);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(-30%);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* === Gradient Animated Text (title + message) === */
+body h1,
+body h2 {
+  background: linear-gradient(
+    360deg,
+    #2d0060 0%,
+    #0a0080 25%,
+    #001a70 50%,
+    #3d0080 75%,
+    #2d0060 100%
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 2px 8px rgba(45, 0, 100, 0.18);
+}
+
+h1 {
+  animation:
+    bw-gradient-move 7s linear infinite,
+    letterspace-move 7s cubic-bezier(0.4, 0, 0.2, 1) forwards,
+    drop-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+h2 {
+  animation:
+    bw-gradient-move 7s linear infinite,
+    drop-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Drop-in per letter */
+.drop-letter {
+  display: inline-block;
+  animation: drop-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  background: linear-gradient(
+    360deg,
+    #2d0060 0%,
+    #0a0080 25%,
+    #001a70 50%,
+    #3d0080 75%,
+    #2d0060 100%
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+/* === Reset Button glow === */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+#reset-btn::after,
+#reset-btn::before {
+  content: "";
+  position: absolute;
+  height: 90%;
+  width: 100%;
+  background-image: conic-gradient(
+    from var(--angle),
+    transparent 3%,
+    rgb(21, 0, 255),
+    rgb(121, 60, 165),
+    rgb(1, 169, 191),
+    rgb(216, 56, 147),
+    rgb(68, 0, 255)
+  );
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  z-index: -1;
+  padding: 3px;
+  border: none;
+  border-radius: 8px;
+  animation: 3s spin linear infinite;
+}
+#reset-btn::before {
+  filter: blur(1.5rem);
+  opacity: 0.5;
+}
+@keyframes spin {
+  from {
+    --angle: 0deg;
+  }
+  to {
+    --angle: 360deg;
+  }
+}
+#reset-btn:hover {
+  box-shadow:
+    0 0 1px 1px #eae9e9,
+    0 0 5px 5px #523ee8;
+}
+
+/* === Checkbox === */
+#vs-computer {
+  accent-color: #0004ff;
+  font-size: 1.1em;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* === Score Bar === */
+.score-bar {
+  position: fixed;
+  top: 200px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 32px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.score-side {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.score-label {
+  font-family: "Axion", sans-serif;
+  font-size: 1rem;
+  background: linear-gradient(360deg, #2d0060 0%, #0a0080 50%, #3d0080 100%);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.score-num {
+  font-family: "ClashDisplay", sans-serif;
+  font-weight: 700;
+  font-size: 3.2rem;
+  line-height: 1;
+  color: #2d0060;
+  display: inline-block;
+}
+
+/* === Score pop / glitch animation === */
+@keyframes score-glitch {
+  0% {
+    transform: scale(1) skewX(0deg);
+    color: #2d0060;
+    text-shadow: none;
+  }
+  8% {
+    transform: scale(1.7) skewX(-10deg);
+    color: #ff00ff;
+    text-shadow:
+      4px 0 #00ffff,
+      -4px 0 #ff00ff;
+  }
+  18% {
+    transform: scale(0.65) skewX(8deg);
+    color: #00ffff;
+    text-shadow:
+      -3px 0 #ff00ff,
+      3px 0 #00ffff;
+  }
+  28% {
+    transform: scale(1.4) skewX(-6deg);
+    color: #ffff00;
+    text-shadow: 3px 0 #ff4400;
+  }
+  38% {
+    transform: scale(0.8) skewX(5deg);
+    color: #ff4400;
+    text-shadow: -2px 0 #44ff00;
+  }
+  50% {
+    transform: scale(1.25) skewX(-3deg);
+    color: #44ff00;
+    text-shadow: 2px 0 #0088ff;
+  }
+  62% {
+    transform: scale(0.9) skewX(2deg);
+    color: #ff00ff;
+    text-shadow: none;
+  }
+  75% {
+    transform: scale(1.1);
+    color: #0088ff;
+  }
+  88% {
+    transform: scale(1.02);
+    color: #2d0060;
+  }
+  100% {
+    transform: scale(1) skewX(0deg);
+    color: #2d0060;
+    text-shadow: none;
+  }
+}
+
+.score-pop {
+  animation: score-glitch 0.58s steps(1) forwards;
+}
+
+/* === Match-win score — yellow / red diagonal stripes === */
+.score-match-win {
+  background: repeating-linear-gradient(
+    -55deg,
+    #ffd700 0px,
+    #ffd700 8px,
+    #ff2200 8px,
+    #ff2200 16px
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: none !important;
+}
+
+/* === Responsive === */
+@media (max-width: 600px) {
+  h1 {
+    top: 10px;
+    font-size: 1.5rem;
+  }
+  h2 {
+    top: 68px;
+    font-size: 0.75rem;
+  }
+  .controls {
+    bottom: 10px;
+    gap: 8px;
+  }
+  #reset-btn {
+    font-size: 0.85rem;
+    padding: 8px 14px;
+  }
+  label {
+    font-size: 0.8rem;
+  }
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/style.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module" src="./js/background.js"></script>
+    <title>Tic-Trap-Toe</title>
+  </head>
+  <body>
+    <canvas id="bg-canvas"></canvas>
+
+    <h1>
+      <span class="drop-letter" style="animation-delay: 0.1s">T</span>
+      <span class="drop-letter" style="animation-delay: 0.1s">i</span>
+      <span class="drop-letter" style="animation-delay: 0.1s">c</span>
+      <span class="drop-letter" style="animation-delay: 0.1s">-</span>
+      <span class="drop-letter" style="animation-delay: 0.4s">T</span>
+      <span class="drop-letter" style="animation-delay: 0.5s">r</span>
+      <span class="drop-letter" style="animation-delay: 0.1s">a</span>
+      <span class="drop-letter" style="animation-delay: 0.7s">p</span>
+      <span class="drop-letter" style="animation-delay: 0.1s">-</span>
+      <span class="drop-letter" style="animation-delay: 0.1s">T</span>
+      <span class="drop-letter" style="animation-delay: 01">o</span>
+      <span class="drop-letter" style="animation-delay: 0.1">e</span>
+    </h1>
+    <h2 id="message">Rotate to play</h2>
+
+    <div class="score-bar">
+      <div class="score-side">
+        <span class="score-label">X</span>
+        <span class="score-num" id="score-x">0</span>
+      </div>
+      <div class="score-side">
+        <span class="score-num" id="score-o">0</span>
+        <span class="score-label">O</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="reset-btn">Reset Game</button>
+      <label>
+        <input type="checkbox" id="vs-computer" />
+        Play vs Computer
+      </label>
+    </div>
+  </body>
+</html>
