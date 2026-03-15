@@ -267,7 +267,7 @@ function syncMarks() {
         const mesh = val === "X" ? buildX() : buildO();
         const r = Math.floor(ci / 3),
           c = ci % 3;
-        mesh.position.set((c - 1) * OFS, (1 - r) * OFS, mz);
+        mesh.position.set((c - 1) * OFS, (1 - r) * OFS, 0.04); // slab will carry z
         mesh.scale.setScalar(0.01);
         fg.add(mesh);
         faceMarks[fi][ci] = { mesh, s: 0.01 };
@@ -642,9 +642,9 @@ function tick() {
         mark.s = Math.min(1, mark.s + 0.065);
         mark.mesh.scale.setScalar(mark.s);
       }
-      // Keep mark riding on the slab's front face
+      // Keep mark riding on the slab's front face at all times
       const slab = cellSlabs[fi][ci];
-      if (slab && slab.target > 0) {
+      if (slab) {
         mark.mesh.position.z = SLAB_DEPTH * slab.mesh.scale.z + 0.04;
       }
     }
