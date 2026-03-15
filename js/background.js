@@ -275,7 +275,7 @@ function syncMarks() {
         const slab = cellSlabs[fi][ci];
         if (slab) {
           slab.mat.color.set(val === "X" ? 0xe8e4ff : 0xd4eeff);
-          slab.target = 0.72;
+          slab.target = 0.45;
         }
         playClick();
       } else if (!val && existing) {
