@@ -6,58 +6,57 @@
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat&logo=css3&logoColor=white)
 ![No Build Step](https://img.shields.io/badge/build-none-brightgreen?style=flat)
 
-Six tic-tac-toe boards. One rotating cube. First to win 3 faces wins the match.
+**Tic-tac-toe is a solved game. This isn't.**
+
+Six boards. One rotating cube. The cube never stops — faces drift toward you, become playable, then spin away. You don't get to pick which game you're in. First to win 3 faces wins the match.
 
 ![Title and cube overview](assets/screenshots/title-cube-overview.png)
-![Active face gameplay](assets/screenshots/active-face-gameplay.png)
-![Golden win bar on won face](assets/screenshots/gold-win-bar.png)
-![Confetti burst on face win](assets/screenshots/confetti-face-win.png)
-![Holographic won face overlay](assets/screenshots/holographic-won-face.png)
-![Match win score state](assets/screenshots/match-win-score.jpg)
 
 ---
 
-## Concept
+## Why it works
 
-The cube never stops spinning. Faces rotate toward you, become playable, then rotate away. At any moment you may be looking at two or three boards at once — each at a different stage of play. The rotation is the game mechanic, not a gimmick.
+Normal tic-tac-toe ends in a draw every time against anyone paying attention. The rotation kills that. You can't stall, you can't force a draw — the board you were about to win might rotate away before your turn comes back. You'll be mid-game on two or three faces at once, each at a different stage, and you have to decide which one is worth committing to.
 
-**There is no timer. No forced order. If you can see the cells, you can play them.**
+There's no timer. No forced turn order between faces. **If you can see the cells, you can play them.** The physics enforce the rules.
 
 ---
 
 ## How to Play
 
-1. Open `index.html` — no build step required
-2. Click any empty cell on a visible face
-3. Each face tracks its own X/O turn independently
-4. Win a face by getting 3 in a row — **first to 3 faces wins**
+1. Open `index.html` — no build step, just open it
+2. Click any empty cell on a face that's rotating toward you
+3. Each face has its own independent X/O game
+4. Get 3 in a row on a face to win it — **first to 3 faces wins the match**
 
-**vs Computer** — check the box; the AI plays O on whichever face you just moved on. Toggling the checkbox resets the game for a clean start.
-**Reset** — clears all six boards and the score.
+**vs Computer** — toggle the checkbox; the AI plays O on whatever face you just moved on. Switching modes resets the game.
 
 ---
 
 ## When a Face Is Won
 
-- A golden 3D bar strikes through the winning three cells
-- Confetti bursts from the winning cell in 3D space
-- The face surface turns metallic white — winning marks glow red, losing marks go black
-- The score digit scrambles before landing on the new count
-- On match win: the score burns yellow-red stripes, the cube decelerates and pulses
+- A golden bar strikes through the three winning cells
+- Confetti bursts from the winning cell in 3D world space
+- The face turns metallic white — winning marks glow red, losers go black
+- The score scrambles before landing on the new number
+- On match win: score burns yellow-red, cube decelerates and pulses twice
+
+![Golden win bar](assets/screenshots/gold-win-bar.png)
+![Confetti burst](assets/screenshots/confetti-face-win.png)
+![Match win score](assets/screenshots/match-win-score.jpg)
 
 ---
 
 ## Stack
 
-- **Three.js** via importmap CDN — raycasting, TextGeometry, per-frame animation
-- Vanilla JS ES modules — four files with clear separation:
-  - `app.js` — pure game logic, no DOM
+- **Three.js** via importmap CDN — raycasting, `TextGeometry`, per-frame animation
+- Vanilla JS ES modules, no build step:
+  - `app.js` — pure game logic
   - `cube.js` — all 3-D geometry, marks, slabs, confetti, win visuals
-  - `title.js` — extruded 3-D title mesh with foreshortening tilt
-  - `audio.js` — fully synthesized Web Audio (no audio files)
-  - `background.js` — scene, input, DOM, tick loop
+  - `title.js` — extruded 3-D title with foreshortening tilt
+  - `audio.js` — fully synthesized Web Audio (zero audio files)
+  - `background.js` — scene, camera, input, DOM, tick loop
 - CSS — conic-gradient button glow, glitch score animation, diagonal-stripe match-win
-- Local fonts: Valorant · ClashDisplay · Axion · Barlow Condensed
 
 ---
 
@@ -65,6 +64,6 @@ The cube never stops spinning. Faces rotate toward you, become playable, then ro
 
 ```bash
 open index.html
-# or (if browser blocks ES modules from file://)
+# or if your browser blocks ES modules from file://
 npx serve .
 ```
