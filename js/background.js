@@ -108,7 +108,7 @@ const hoverMat = new THREE.MeshBasicMaterial({
 const nodeGeo = new THREE.SphereGeometry(0.12, 8, 8);
 const hitGeo = new THREE.PlaneGeometry(CELL - 0.08, CELL - 0.08);
 const hoverGeo = new THREE.PlaneGeometry(CELL - 0.14, CELL - 0.14);
-const SLAB_DEPTH = 0.5; // full extrusion depth
+const SLAB_DEPTH = 1.4; // full extrusion depth
 const slabGeo = new THREE.BoxGeometry(CELL - 0.18, CELL - 0.18, SLAB_DEPTH);
 
 /* ── Build all 6 faces ── */
@@ -275,7 +275,7 @@ function syncMarks() {
         const slab = cellSlabs[fi][ci];
         if (slab) {
           slab.mat.color.set(val === "X" ? 0xe8e4ff : 0xd4eeff);
-          slab.target = 0.78;
+          slab.target = 0.72;
         }
         playClick();
       } else if (!val && existing) {
@@ -499,33 +499,52 @@ function playClick() {
 function playThud() {
   const ctx = getAudio();
   const now = ctx.currentTime;
-  // Low-frequency pitch drop
+
+  // Synthesized reverb impulse response — 3s decaying noise
+  const irLen = ctx.sampleRate * 3.0;
+  const irBuf = ctx.createBuffer(2, irLen, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = irBuf.getChannelData(ch);
+    for (let i = 0; i < irLen; i++)
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 1.4);
+  }
+  const convolver = ctx.createConvolver();
+  convolver.buffer = irBuf;
+  const wetGain = ctx.createGain();
+  wetGain.gain.value = 0.55;
+  convolver.connect(wetGain);
+  wetGain.connect(ctx.destination);
+
+  // Low-frequency pitch drop — routed dry + wet
   const osc = ctx.createOscillator();
-  osc.frequency.setValueAtTime(130, now);
-  osc.frequency.exponentialRampToValueAtTime(38, now + 0.35);
+  osc.frequency.setValueAtTime(140, now);
+  osc.frequency.exponentialRampToValueAtTime(36, now + 0.4);
   const oscGain = ctx.createGain();
-  oscGain.gain.setValueAtTime(0.9, now);
-  oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+  oscGain.gain.setValueAtTime(1.0, now);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
   osc.connect(oscGain);
-  oscGain.connect(ctx.destination);
+  oscGain.connect(ctx.destination); // dry
+  oscGain.connect(convolver); // wet
   osc.start();
-  osc.stop(now + 0.5);
-  // Noise punch layer
-  const nLen = ctx.sampleRate * 0.12;
+  osc.stop(now + 0.55);
+
+  // Noise punch — low-passed, also into reverb
+  const nLen = ctx.sampleRate * 0.15;
   const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
   const nd = nBuf.getChannelData(0);
   for (let i = 0; i < nLen; i++)
-    nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nLen, 4);
+    nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nLen, 3);
   const nSrc = ctx.createBufferSource();
   nSrc.buffer = nBuf;
   const lpf = ctx.createBiquadFilter();
   lpf.type = "lowpass";
-  lpf.frequency.value = 320;
+  lpf.frequency.value = 280;
   const nGain = ctx.createGain();
-  nGain.gain.setValueAtTime(0.5, now);
+  nGain.gain.setValueAtTime(0.55, now);
   nSrc.connect(lpf);
   lpf.connect(nGain);
-  nGain.connect(ctx.destination);
+  nGain.connect(ctx.destination); // dry
+  nGain.connect(convolver); // wet
   nSrc.start();
 }
 
