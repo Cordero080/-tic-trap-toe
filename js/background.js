@@ -271,12 +271,13 @@ function syncMarks() {
         mesh.scale.setScalar(0.01);
         fg.add(mesh);
         faceMarks[fi][ci] = { mesh, s: 0.01 };
-        // Activate cell slab extrusion
+        // Activate cell slab extrusion + click sound
         const slab = cellSlabs[fi][ci];
         if (slab) {
           slab.mat.color.set(val === "X" ? 0xe8e4ff : 0xd4eeff);
           slab.target = 0.78;
         }
+        playClick();
       } else if (!val && existing) {
         fg.remove(existing.mesh);
         faceMarks[fi][ci] = null;
@@ -417,8 +418,10 @@ function applyWonFaceVisuals(fi) {
       });
     }
     if (slab && isWinner) {
-      // Winning slabs punch out to full depth
-      slab.mat.color.set(0x3a0a00);
+      // Winning slabs punch to full depth in jet black metallic
+      slab.mat.color.set(0x080808);
+      slab.mat.metalness = 0.98;
+      slab.mat.roughness = 0.02;
       slab.target = 1.0;
     }
   }
@@ -456,8 +459,106 @@ function onFaceWon(fi, ci) {
     if (matchOver) {
       el.classList.remove("score-pop");
       el.classList.add("score-match-win");
+      playMatchWin();
+    } else {
+      playThud();
     }
   });
+}
+
+/* ── Audio — Web Audio API synthesis, no files needed ── */
+let _audioCtx = null;
+function getAudio() {
+  if (!_audioCtx) _audioCtx = new AudioContext();
+  if (_audioCtx.state === "suspended") _audioCtx.resume();
+  return _audioCtx;
+}
+
+function playClick() {
+  const ctx = getAudio();
+  const len = ctx.sampleRate * 0.07;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++)
+    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 10);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const bpf = ctx.createBiquadFilter();
+  bpf.type = "bandpass";
+  bpf.frequency.value = 5200;
+  bpf.Q.value = 1.8;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.35, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+  src.connect(bpf);
+  bpf.connect(g);
+  g.connect(ctx.destination);
+  src.start();
+}
+
+function playThud() {
+  const ctx = getAudio();
+  const now = ctx.currentTime;
+  // Low-frequency pitch drop
+  const osc = ctx.createOscillator();
+  osc.frequency.setValueAtTime(130, now);
+  osc.frequency.exponentialRampToValueAtTime(38, now + 0.35);
+  const oscGain = ctx.createGain();
+  oscGain.gain.setValueAtTime(0.9, now);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+  osc.connect(oscGain);
+  oscGain.connect(ctx.destination);
+  osc.start();
+  osc.stop(now + 0.5);
+  // Noise punch layer
+  const nLen = ctx.sampleRate * 0.12;
+  const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
+  const nd = nBuf.getChannelData(0);
+  for (let i = 0; i < nLen; i++)
+    nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nLen, 4);
+  const nSrc = ctx.createBufferSource();
+  nSrc.buffer = nBuf;
+  const lpf = ctx.createBiquadFilter();
+  lpf.type = "lowpass";
+  lpf.frequency.value = 320;
+  const nGain = ctx.createGain();
+  nGain.gain.setValueAtTime(0.5, now);
+  nSrc.connect(lpf);
+  lpf.connect(nGain);
+  nGain.connect(ctx.destination);
+  nSrc.start();
+}
+
+function playMatchWin() {
+  const ctx = getAudio();
+  const now = ctx.currentTime;
+  // Deep resonant chord — A1, E2, A2, C#3
+  [55, 82.4, 110, 138.6].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.18, now + 0.4 + i * 0.12);
+    g.gain.setValueAtTime(0.18, now + 1.8);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(now + i * 0.08);
+    osc.stop(now + 3.5);
+  });
+  // Metallic shimmer on top
+  const shimmer = ctx.createOscillator();
+  shimmer.type = "triangle";
+  shimmer.frequency.setValueAtTime(880, now);
+  shimmer.frequency.exponentialRampToValueAtTime(440, now + 1.2);
+  const sg = ctx.createGain();
+  sg.gain.setValueAtTime(0.12, now);
+  sg.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+  shimmer.connect(sg);
+  sg.connect(ctx.destination);
+  shimmer.start(now);
+  shimmer.stop(now + 1.2);
 }
 
 /* ── Computer move ── */
@@ -542,6 +643,8 @@ document.getElementById("reset-btn").addEventListener("click", () => {
       slab.mesh.position.z = SLAB_DEPTH / 2;
       slab.mat.opacity = 0;
       slab.mat.color.set(0xd0cfe8);
+      slab.mat.metalness = 0.92;
+      slab.mat.roughness = 0.08;
     }
   }
   // Remove holographic won-face overlays
