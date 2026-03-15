@@ -460,8 +460,10 @@ function onFaceWon(fi, ci) {
       el.classList.remove("score-pop");
       el.classList.add("score-match-win");
       playMatchWin();
+      playVoice(true);
     } else {
       playThud();
+      playVoice(false);
     }
   });
 }
@@ -546,6 +548,28 @@ function playThud() {
   nGain.connect(ctx.destination); // dry
   nGain.connect(convolver); // wet
   nSrc.start();
+}
+
+const WIN_PHRASES = ["aw yeah", "oh yeah", "let's go", "that's it"];
+let phraseIdx = 0;
+
+function playVoice(matchWin = false) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const text = matchWin
+    ? "oh yeah, game over"
+    : WIN_PHRASES[phraseIdx++ % WIN_PHRASES.length];
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.pitch = matchWin ? 0.3 : 0.55;
+  utter.rate = matchWin ? 0.65 : 0.78;
+  utter.volume = 1.0;
+  // Prefer a deep male voice if available
+  const voices = window.speechSynthesis.getVoices();
+  const deep = voices.find((v) =>
+    /daniel|alex|fred|google uk english male|microsoft david/i.test(v.name),
+  );
+  if (deep) utter.voice = deep;
+  window.speechSynthesis.speak(utter);
 }
 
 function playMatchWin() {
