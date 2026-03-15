@@ -8,11 +8,11 @@
 
 Six tic-tac-toe boards. One rotating cube. First to win 3 faces wins the match.
 
-![Title and cube overview](assets/screenshots/title-cube-overview.jpg)
-![Active face gameplay](assets/screenshots/active-face-gameplay.jpg)
-![Golden win bar on won face](assets/screenshots/golden-win-bar.jpg)
-![Confetti burst on face win](assets/screenshots/confetti-face-win.jpg)
-![Holographic won face overlay](assets/screenshots/holographic-won-face.jpg)
+![Title and cube overview](assets/screenshots/title-cube-overview.png)
+![Active face gameplay](assets/screenshots/active-face-gameplay.png)
+![Golden win bar on won face](assets/screenshots/gold-win-bar.png)
+![Confetti burst on face win](assets/screenshots/confetti-face-win.png)
+![Holographic won face overlay](assets/screenshots/holographic-won-face.png)
 ![Match win score state](assets/screenshots/match-win-score.jpg)
 
 ---
