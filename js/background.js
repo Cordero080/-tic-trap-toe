@@ -455,15 +455,18 @@ function onFaceWon(fi, ci) {
   if (!winner || winner === "draw") return;
   spawnConfetti(fi, ci);
   applyWonFaceVisuals(fi);
+  // Fire audio immediately — no waiting for score scramble
+  if (matchOver) {
+    playMatchWin();
+    playRobotVoice(true);
+  } else {
+    playThud();
+    playRobotVoice(false);
+  }
   animateScore(winner, (el) => {
     if (matchOver) {
       el.classList.remove("score-pop");
       el.classList.add("score-match-win");
-      playMatchWin();
-      playRobotVoice(true);
-    } else {
-      playThud();
-      playRobotVoice(false);
     }
   });
 }
