@@ -94,6 +94,7 @@ const cornerMats = [];
 const faceGroups = [];
 const hitPlaneMeshes = [];
 const faceMarks = Array.from({ length: 6 }, () => new Array(9).fill(null));
+const cellSlabs = Array.from({ length: 6 }, () => new Array(9).fill(null));
 const hoverMeshes = [];
 
 /* ── Shared geometries / materials ── */
@@ -107,6 +108,8 @@ const hoverMat = new THREE.MeshBasicMaterial({
 const nodeGeo = new THREE.SphereGeometry(0.12, 8, 8);
 const hitGeo = new THREE.PlaneGeometry(CELL - 0.08, CELL - 0.08);
 const hoverGeo = new THREE.PlaneGeometry(CELL - 0.14, CELL - 0.14);
+const SLAB_DEPTH = 0.5; // full extrusion depth
+const slabGeo = new THREE.BoxGeometry(CELL - 0.18, CELL - 0.18, SLAB_DEPTH);
 
 /* ── Build all 6 faces ── */
 for (let fi = 0; fi < 6; fi++) {
@@ -199,6 +202,24 @@ for (let fi = 0; fi < 6; fi++) {
     hitPlaneMeshes.push(hp);
   }
 
+  /* Cell slabs — one per cell, extrude outward on mark placement */
+  for (let ci = 0; ci < 9; ci++) {
+    const r = Math.floor(ci / 3),
+      c = ci % 3;
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x1a1228,
+      metalness: 0.5,
+      roughness: 0.4,
+      transparent: true,
+      opacity: 0,
+    });
+    const slab = new THREE.Mesh(slabGeo, mat);
+    slab.position.set((c - 1) * OFS, (1 - r) * OFS, SLAB_DEPTH / 2);
+    slab.scale.z = 0.001;
+    fg.add(slab);
+    cellSlabs[fi][ci] = { mesh: slab, mat, t: 0, target: 0 };
+  }
+
   /* Hover highlight (one per face, repositioned on hover) */
   const hv = new THREE.Mesh(hoverGeo, hoverMat);
   hv.position.z = 0.06;
@@ -250,6 +271,12 @@ function syncMarks() {
         mesh.scale.setScalar(0.01);
         fg.add(mesh);
         faceMarks[fi][ci] = { mesh, s: 0.01 };
+        // Activate cell slab extrusion
+        const slab = cellSlabs[fi][ci];
+        if (slab) {
+          slab.mat.color.set(val === "X" ? 0x1a1040 : 0x0d1a2e);
+          slab.target = 0.32; // normal extrusion depth
+        }
       } else if (!val && existing) {
         fg.remove(existing.mesh);
         faceMarks[fi][ci] = null;
@@ -368,25 +395,32 @@ function applyWonFaceVisuals(fi) {
   wonOverlays.push({ mesh, mat, fg, t: 0 });
 
   // Style each mark: winners → vivid red + emissive; losers → black
+  // Also boost winning slabs to full extrusion
   for (let ci = 0; ci < 9; ci++) {
     const mark = faceMarks[fi][ci];
-    if (!mark) continue;
+    const slab = cellSlabs[fi][ci];
     const isWinner = winSet.has(ci);
-    mark.mesh.traverse((child) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone();
-        if (isWinner) {
-          child.material.color.set(0xff1a00);
-          child.material.emissive = new THREE.Color(0x991000);
-          child.material.emissiveIntensity = 0.55;
-        } else {
-          // Losing marks sink to near-black
-          child.material.color.set(0x111111);
-          child.material.emissive = new THREE.Color(0x000000);
-          child.material.emissiveIntensity = 0;
+    if (mark) {
+      mark.mesh.traverse((child) => {
+        if (child.isMesh && child.material) {
+          child.material = child.material.clone();
+          if (isWinner) {
+            child.material.color.set(0xff1a00);
+            child.material.emissive = new THREE.Color(0x991000);
+            child.material.emissiveIntensity = 0.55;
+          } else {
+            child.material.color.set(0x111111);
+            child.material.emissive = new THREE.Color(0x000000);
+            child.material.emissiveIntensity = 0;
+          }
         }
-      }
-    });
+      });
+    }
+    if (slab && isWinner) {
+      // Winning slabs punch out to full depth
+      slab.mat.color.set(0x3a0a00);
+      slab.target = 1.0;
+    }
   }
 }
 
@@ -498,6 +532,18 @@ document.getElementById("reset-btn").addEventListener("click", () => {
       }
     }
   }
+  // Reset cell slabs
+  for (const row of cellSlabs) {
+    for (const slab of row) {
+      if (!slab) continue;
+      slab.t = 0;
+      slab.target = 0;
+      slab.mesh.scale.z = 0.001;
+      slab.mesh.position.z = SLAB_DEPTH / 2;
+      slab.mat.opacity = 0;
+      slab.mat.color.set(0x1a1228);
+    }
+  }
   // Remove holographic won-face overlays
   for (const o of wonOverlays) {
     o.fg.remove(o.mesh);
@@ -594,6 +640,20 @@ function tick() {
         mark.s = Math.min(1, mark.s + 0.065);
         mark.mesh.scale.setScalar(mark.s);
       }
+    }
+  }
+
+  /* Cell slab extrusion animation */
+  for (const row of cellSlabs) {
+    for (const slab of row) {
+      if (!slab || slab.target === 0) continue;
+      slab.t = Math.min(1, slab.t + dt * 4);
+      const ease = 1 - Math.pow(1 - slab.t, 3); // cubic ease-out
+      const ext = ease * slab.target;
+      slab.mesh.scale.z = Math.max(0.001, ext);
+      // Keep back face flush with cube surface: position z = depth/2 * scale
+      slab.mesh.position.z = (SLAB_DEPTH / 2) * Math.max(0.001, ext);
+      slab.mat.opacity = ease * 0.9;
     }
   }
 
