@@ -29,6 +29,7 @@ There's no timer. No forced turn order between faces. **If you can see the cells
 3. Each face has its own independent X/O game
 4. Get **3 in a row** on a face to claim it
 5. Claim **3 faces** to win the match
+6. Hit **Next Round** to keep playing — or **Reset Game** to start fresh
 
 **vs Computer** — toggle the checkbox; the AI plays O on whatever face you just moved on. Switching modes resets the game.
 
@@ -48,16 +49,38 @@ There's no timer. No forced turn order between faces. **If you can see the cells
 
 ---
 
+## Adaptive AI
+
+When playing vs Computer, the AI gets harder every time you win a face — and that difficulty **carries across rounds**. Win a match, hit Next Round, and the AI picks up where it left off.
+
+| Faces won (total) | AI level | Behavior |
+|---|---|---|
+| 0 | Rookie | Plays randomly 70% of the time |
+| 1 | Casual | Plays randomly 40% of the time |
+| 2 | Focused | Plays randomly 15% of the time |
+| 3 | Sharp | Always plays the smart heuristic |
+| 4+ | Unbeatable | Full minimax — provably optimal |
+
+**How to beat Unbeatable:** You can't win, but you can draw. Take center immediately if it's free. If the AI takes center, go to a corner. Always block the most dangerous threat. With perfect play every game ends in a draw — that's the ceiling.
+
+---
+
+## Adaptive Cube Steering
+
+As faces get claimed, the cube stops giving equal time to all six sides. When 3 or fewer faces remain in play, the rotation biases toward showing the unfinished faces — arriving at their angles faster and lingering longer. The fewer faces left, the stronger the pull. The cube never stops spinning; it just stops being equally fair to faces that are already done.
+
+---
+
 ## Stack
 
 - **Three.js** via importmap CDN — raycasting, `TextGeometry`, per-frame animation
 - Vanilla JS ES modules, no build step:
-  - `app.js` — pure game logic
-  - `cube.js` — all 3-D geometry, marks, slabs, confetti, win visuals
+  - `app.js` — pure game logic, adaptive AI (minimax + slop-rate difficulty ladder)
+  - `cube.js` — all 3-D geometry, marks, slabs, confetti, win visuals, adaptive steering
   - `title.js` — extruded 3-D title with foreshortening tilt
   - `audio.js` — fully synthesized Web Audio (zero audio files)
-  - `background.js` — scene, camera, input, DOM, tick loop
-- CSS — conic-gradient button glow, glitch score animation, diagonal-stripe match-win
+  - `background.js` — scene, camera, input, DOM, round/difficulty state, tick loop
+- CSS — conic-gradient button glow, glitch score animation, diagonal-stripe match-win, rainbow round label
 
 ---
 

@@ -22,8 +22,10 @@ import {
   matchOver,
   matchWinner,
   vsComputer,
+  difficulty,
   makeMove,
   resetAll,
+  resetRound,
 } from "./app.js";
 import {
   hitPlaneMeshes,
@@ -150,15 +152,44 @@ canvas.addEventListener("mousemove", (e) => {
   canvas.style.cursor = "pointer";
 });
 
-/* ── Reset ── */
+/* ── Reset / Next Round ── */
+const nextRoundBtn = document.getElementById("next-round-btn");
+const roundLabelEl = document.getElementById("round-label");
+let currentRound = 1;
+
+function setRoundLabel() {
+  if (currentRound <= 1) {
+    roundLabelEl.style.display = "none";
+  } else {
+    roundLabelEl.textContent = `Round ${currentRound}`;
+    roundLabelEl.style.display = "block";
+  }
+}
+
+// Full reset — clears difficulty back to Rookie and back to round 1
 function doReset() {
   resetAll();
   resetCubeVisuals();
   scoreXEl.classList.remove("score-match-win");
   scoreOEl.classList.remove("score-match-win");
+  nextRoundBtn.style.display = "none";
+  currentRound = 1;
+  setRoundLabel();
+}
+
+// Partial reset — keeps difficulty so the AI stays at the earned level
+function doNextRound() {
+  resetRound();
+  resetCubeVisuals();
+  scoreXEl.classList.remove("score-match-win");
+  scoreOEl.classList.remove("score-match-win");
+  nextRoundBtn.style.display = "none";
+  currentRound++;
+  setRoundLabel();
 }
 
 document.getElementById("reset-btn").addEventListener("click", doReset);
+nextRoundBtn.addEventListener("click", doNextRound);
 
 // Toggling vs-computer mid-game resets so the AI state starts clean
 document.getElementById("vs-computer").addEventListener("change", doReset);
@@ -172,13 +203,22 @@ window.addEventListener("resize", () => {
 
 /* ── Message ── */
 const msgEl = document.getElementById("message");
+const DIFFICULTY_NAMES = ["Rookie", "Casual", "Focused", "Sharp", "Unbeatable"];
+let nextRoundShown = false; // guard so we only show the button once per match end
 
 function updateMessage() {
   if (matchOver) {
+    // Reveal the Next Round button exactly once when the match ends
+    if (!nextRoundShown) {
+      nextRoundBtn.style.display = "inline-block";
+      nextRoundShown = true;
+    }
     msgEl.textContent = `${matchWinner} wins the match!`;
     return;
   }
+  nextRoundShown = false; // reset guard for next match
   const fi = getActiveFaceIdx();
+  const diffName = DIFFICULTY_NAMES[difficulty] ?? "Unbeatable";
   if (fi < 0) {
     msgEl.textContent = `X: ${score.X}  ·  O: ${score.O}  ·  First to 3`;
     return;
@@ -188,6 +228,8 @@ function updateMessage() {
     msgEl.textContent = `Draw on this face  ·  X: ${score.X}  O: ${score.O}`;
   } else if (face.winner) {
     msgEl.textContent = `${face.winner} won this face  ·  X: ${score.X}  O: ${score.O}`;
+  } else if (vsComputer) {
+    msgEl.textContent = `${face.turn}'s turn  ·  AI: ${diffName}  ·  X: ${score.X}  O: ${score.O}`;
   } else {
     msgEl.textContent = `${face.turn}'s turn  ·  X: ${score.X}  O: ${score.O}`;
   }

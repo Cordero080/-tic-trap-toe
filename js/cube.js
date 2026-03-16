@@ -128,6 +128,7 @@ export function initCube(scene, animateScoreCb) {
 
   /* Core cube box */
   cube = new THREE.Group();
+  cube.position.y = -0.8; // nudge down so it sits centered between title and controls
   scene.add(cube);
   cube.add(
     new THREE.Mesh(
@@ -590,8 +591,63 @@ export function updateCube(dt, t) {
     cube.scale.setScalar(pulse);
   } else {
     matchOverT = -1;
-    cube.rotation.y = t * 0.22;
-    cube.rotation.x = Math.sin(t * 0.13) * 0.48;
+
+    // ── Adaptive steering — bias rotation toward unfinished faces ──────────
+    // Collect indices of faces that are still in play (no winner yet)
+    const activeIdxs = faceStates.reduce((acc, f, i) => {
+      if (!f.winner) acc.push(i);
+      return acc;
+    }, []);
+
+    const baseY = t * 0.22;
+    const baseX = Math.sin(t * 0.13) * 0.48;
+
+    if (activeIdxs.length > 0 && activeIdxs.length <= 3) {
+      // Each side face has an ideal rotation.y where it fully faces the camera.
+      // Top (fi=2) and bottom (fi=3) are controlled by rotation.x, handled below.
+      const IDEAL_Y = { 0: 0, 1: Math.PI, 4: -Math.PI / 2, 5: Math.PI / 2 };
+
+      // Find the active side face whose ideal Y is currently closest to baseY.
+      // "Closest" accounts for multiple full rotations so the cube never snaps.
+      let closestDelta = null;
+      let minGap = Infinity;
+      for (const fi of activeIdxs) {
+        if (!(fi in IDEAL_Y)) continue;
+        const raw = IDEAL_Y[fi];
+        // Shift the ideal into the same "period" as the current baseY
+        const n = Math.round((baseY - raw) / (2 * Math.PI));
+        const nearestIdeal = raw + n * 2 * Math.PI;
+        const delta = nearestIdeal - baseY;
+        if (Math.abs(delta) < minGap) {
+          minGap = Math.abs(delta);
+          closestDelta = delta;
+        }
+      }
+
+      // steerStrength by face count: subtle at 3, strong at 1.
+      // The tanh gives an S-curve: gentle near the target, firm further away.
+      // Effect: cube arrives at active-face angles faster and lingers there longer.
+      const STEER = [0, 1.2, 0.65, 0.28]; // indexed by activeIdxs.length
+      const steerStrength = STEER[activeIdxs.length] ?? 0;
+      const steer =
+        closestDelta !== null
+          ? steerStrength * Math.tanh(closestDelta * 0.6)
+          : 0;
+
+      cube.rotation.y = baseY + steer;
+
+      // Reduce X tilt so side faces stay in view longer.
+      // Exception: if a top or bottom face is still active, keep most of the tilt
+      // so those faces have a fair chance to show up too.
+      const hasTopBottom = activeIdxs.some((fi) => fi === 2 || fi === 3);
+      const xFactor = hasTopBottom ? 0.7 : activeIdxs.length / 6;
+      cube.rotation.x = baseX * xFactor;
+    } else {
+      // All 4–6 faces still active — standard free spin, no steering needed
+      cube.rotation.y = baseY;
+      cube.rotation.x = baseX;
+    }
+
     cube.scale.setScalar(1);
   }
 

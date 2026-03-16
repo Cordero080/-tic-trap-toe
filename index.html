@@ -25,6 +25,7 @@
 
     <h1>Tic-Trap-Toe</h1>
     <h2 id="message">Rotate to play</h2>
+    <div id="round-label" class="round-label" style="display: none"></div>
 
     <div class="score-bar">
       <div class="score-side">
@@ -38,7 +39,10 @@
     </div>
 
     <div class="controls">
-      <button id="reset-btn">Reset Game</button>
+      <div class="controls-row">
+        <button id="reset-btn">Reset Game</button>
+        <button id="next-round-btn" style="display: none">Next Round</button>
+      </div>
       <label>
         <input type="checkbox" id="vs-computer" />
         Play vs Computer
